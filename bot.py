@@ -178,7 +178,7 @@ async def set_reminder(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
         context.user_data['morning_time'] = time
         await update.message.reply_text(f"Уведомление утром установлено на {time}. Теперь введите время вечера в формате HH:MM.")
         return REMINDER_TIME
-    except ValueError
+    except ValueError:
         await update.message.reply_text("Неверный формат времени. Пожалуйста, введите время в формате HH:MM.")
         return SET_REMINDER
 
