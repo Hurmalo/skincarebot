@@ -30,10 +30,10 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
 async def photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     photo_file = await update.message.photo[-1].get_file()
     photo_path = f'/tmp/{photo_file.file_id}.jpg'
-    await photo_file.download(photo_path)
+    await photo_file.download_to_drive(photo_path)
 
     # Сохранение пути к файлу в данных пользователя
-    context.user_data['photo_url'] = photo_file.file_path
+    context.user_data['photo_url'] = photo_path
 
     await update.message.reply_text("Фото получено! Давайте определим ваш тип кожи.")
     keyboard = [
