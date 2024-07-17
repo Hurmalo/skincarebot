@@ -29,20 +29,15 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
 
 # Обработчик фото
 async def photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    # Проверка качества фото через OpenAI
     photo_file = await update.message.photo[-1].get_file()
     photo_path = f'/tmp/{photo_file.file_id}.jpg'
 
     # Загрузка файла
     await photo_file.download_to_drive(photo_path)
 
-    response = openai.Image.create_variation(
-        image=open(photo_path, "rb"),
-        n=1,
-        size="1024x1024"
-    )
+    # Оценка качества фотографии (это просто placeholder, замените на свою проверку)
+    description = "лицо хорошо видно"  # Замените на свою логику проверки изображения
 
-    description = response['data'][0]['url']
     if "лицо" not in description or "плохо видно" in description:
         await update.message.reply_text("Фото не подходит. Пожалуйста, сделайте новое фото, убедитесь, что ваше лицо хорошо видно и освещено.")
         return PHOTO
