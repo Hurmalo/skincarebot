@@ -1,137 +1,136 @@
 import os
 import openai
-from telegram import Update
+from telegram import Update, ReplyKeyboardMarkup, KeyboardButton
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes, ConversationHandler
 
 # Инициализация бота
 TELEGRAM_TOKEN = os.getenv('TELEGRAM_TOKEN')
 OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
 
+if not TELEGRAM_TOKEN:
+    raise ValueError("No TELEGRAM_TOKEN provided")
+if not OPENAI_API_KEY:
+    raise ValueError("No OPENAI_API_KEY provided")
+
 openai.api_key = OPENAI_API_KEY
 
 # Определение этапов разговора
-PHOTO, SKIN_TYPE_TEST, QUESTIONS, REGION, RESULTS = range(5)
+PHOTO, SKIN_TYPE, TEST, QUESTIONS, RESULTS = range(5)
 
 # Обработчик команды /start
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     await update.message.reply_text(
-        "Привет! Пожалуйста, отправьте фото вашего лица, и мы начнем диагностику."
+        "Привет! Я AI бот, созданный для предоставления общих советов по уходу за кожей на основе ваших ответов и данных AI. "
+        "Помните, что мои рекомендации не являются персонализированными и не заменяют консультацию с профессиональным дерматологом. "
+        "Для начала отправьте фото вашего лица."
     )
     return PHOTO
 
 # Обработчик фото
 async def photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    await update.message.reply_text(
-        "Фото получено! Давайте определим ваш тип кожи. Если вы не знаете свой тип кожи, выполните следующий тест:\n\n"
-        "✔ Умыться теплой водой без очищающих средств. На лице не должно быть косметики, пыли и других загрязнений, которые нарушат чистоту эксперимента.\n\n"
-        "✔ Промокнуть кожу насухо, не растирая.\n\n"
-        "✔ Для чистоты эксперимента подождать 30–40 минут, пока выработается нормальное для кожи количество себума.\n\n"
-        "✔ В это время можно заниматься своими делами. Главное — исключить физические упражнения, не готовить на плите или в духовке и не находиться на открытом солнце.\n\n"
-        "✔ Оценить состояние кожи и распределение жирного блеска. Можно приложить чистую салфетку ко лбу, носу, подбородку и обеим щекам. Желательно, чтобы разных участков лица касались разные части салфетки.\n\n"
-        "Пожалуйста, выберите один из следующих вариантов:\n"
-        "1. Кожа блестит равномерно, появилось неприятное ощущение пленки? Салфетка прилипает ко всем участкам, и на ней остаются следы? (Жирная кожа)\n"
-        "2. Кожа блестит в Т-зоне, салфетка прилипает только ко лбу и носу, и эти же участки оставляют следы? (Комбинированная кожа)\n"
-        "3. Кожа матовая, не стягивается, салфетка вообще не прилипает к лицу и остается абсолютно чистой? (Нормальная кожа)\n"
-        "4. Салфетка не прилипает к лицу и остается чистой, а кожа зудит и стягивается? (Сухая кожа)"
-    )
-    return SKIN_TYPE_TEST
+    # Здесь должна быть проверка качества фото
+    await update.message.reply_text("Фото получено! Давайте определим ваш тип кожи.")
+    keyboard = [
+        [KeyboardButton("Жирная кожа"), KeyboardButton("Комбинированная кожа")],
+        [KeyboardButton("Нормальная кожа"), KeyboardButton("Сухая кожа")],
+        [KeyboardButton("Я не знаю")]
+    ]
+    reply_markup = ReplyKeyboardMarkup(keyboard, one_time_keyboard=True)
+    await update.message.reply_text("Выберите ваш тип кожи:", reply_markup=reply_markup)
+    return SKIN_TYPE
 
-# Обработчик теста для определения типа кожи
-async def skin_type_test(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    text = update.message.text.lower()
-    if "1" in text:
-        skin_type = "Жирная кожа"
-    elif "2" in text:
-        skin_type = "Комбинированная кожа"
-    elif "3" in text:
-        skin_type = "Нормальная кожа"
-    elif "4" in text:
-        skin_type = "Сухая кожа"
-    else:
+# Обработчик выбора типа кожи
+async def skin_type(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    text = update.message.text
+    if text == "Я не знаю":
         await update.message.reply_text(
-            "Пожалуйста, выберите один из предложенных вариантов: 1, 2, 3 или 4."
+            "Пройдите тест:\n"
+            "1. Умыться теплой водой без очищающих средств.\n"
+            "2. Промокнуть кожу насухо, не растирая.\n"
+            "3. Подождать 30–40 минут.\n"
+            "4. Оценить состояние кожи и распределение жирного блеска.\n"
+            "Выберите один из следующих вариантов:\n"
+            "1. Кожа блестит равномерно (Жирная кожа)\n"
+            "2. Кожа блестит в Т-зоне (Комбинированная кожа)\n"
+            "3. Кожа матовая (Нормальная кожа)\n"
+            "4. Кожа стягивается (Сухая кожа)"
         )
-        return SKIN_TYPE_TEST
-    
-    context.user_data['skin_type'] = skin_type
-    await update.message.reply_text(f"Ваш тип кожи: {skin_type}. Теперь ответьте на несколько вопросов о вашем здоровье и образе жизни.")
-    await update.message.reply_text("Есть ли у вас чувствительность к каким-либо ингредиентам или аллергии? (да/нет, если да, укажите какие)")
-    return QUESTIONS
+        return TEST
+    else:
+        context.user_data['skin_type'] = text
+        return await ask_next_question(update, context)
 
-# Обработчик вопросов
+# Обработчик теста
+async def test(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    text = update.message.text
+    skin_types = {
+        "1": "Жирная кожа",
+        "2": "Комбинированная кожа",
+        "3": "Нормальная кожа",
+        "4": "Сухая кожа"
+    }
+    if text in skin_types:
+        context.user_data['skin_type'] = skin_types[text]
+        return await ask_next_question(update, context)
+    else:
+        await update.message.reply_text("Пожалуйста, выберите один из предложенных вариантов: 1, 2, 3 или 4.")
+        return TEST
+
+# Функция для задания следующего вопроса
+async def ask_next_question(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    questions = [
+        "Есть ли у вас чувствительность к каким-либо ингредиентам или аллергии? (да/нет, если да, укажите какие)",
+        "Какой у вас питьевой режим? (например, пью 2 литра воды в день, редко пью воду)",
+        "Какой у вас рацион? (например, сбалансированный, много сладкого, вегетарианский и т.д.)",
+        "Есть ли у вас гормональные изменения или проблемы? (например, беременность, подростковый возраст, менопауза)",
+        "Сколько времени вы проводите на улице каждый день? (например, менее часа, 1-3 часа, более 3 часов)",
+        "Какой у вас уровень физической активности? (например, занимаюсь спортом 3 раза в неделю, малоактивный образ жизни)",
+        "Какие у вас условия работы? (например, работа в офисе, работа на улице)",
+        "Какой у вас уровень стресса и сколько вы спите каждую ночь? (например, высокий уровень стресса, сплю 7-8 часов)",
+        "Как ваша кожа реагирует на сезонные изменения? (например, сухая зимой, жирная летом)",
+        "Вы зарегистрированы у дерматолога? Если да, то с каким диагнозом и какое лечение назначено?",
+        "Принимаете ли вы какие-либо лекарства/добавки? Если да, то какие?",
+        "Сколько вам лет и есть ли у вас гормональные изменения? (например, мне 25, нет изменений)",
+        "В каком городе вы живете?"
+    ]
+
+    current_question = context.user_data.get('current_question', 0)
+    if current_question < len(questions):
+        await update.message.reply_text(questions[current_question])
+        context.user_data['current_question'] = current_question + 1
+        return QUESTIONS
+    else:
+        return await provide_recommendations(update, context)
+
+# Обработчик ответов на вопросы
 async def questions(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    context.user_data['sensitivity'] = update.message.text
-    await update.message.reply_text("Какой у вас питьевой режим? (например, пью 2 литра воды в день, редко пью воду)")
-    return QUESTIONS + 1
+    context.user_data[f'answer_{context.user_data["current_question"]}'] = update.message.text
+    return await ask_next_question(update, context)
 
-async def water_intake(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    context.user_data['water_intake'] = update.message.text
-    await update.message.reply_text("Какой у вас рацион? (например, сбалансированный, много сладкого, вегетарианский и т.д.)")
-    return QUESTIONS + 2
-
-async def diet_questions(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    context.user_data['diet'] = update.message.text
-    await update.message.reply_text("Есть ли у вас гормональные изменения или проблемы? (например, беременность, подростковый возраст, менопауза)")
-    return QUESTIONS + 3
-
-async def hormones_questions(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    context.user_data['hormones'] = update.message.text
-    await update.message.reply_text("Сколько времени вы проводите на улице каждый день? (например, менее часа, 1-3 часа, более 3 часов)")
-    return QUESTIONS + 4
-
-async def outdoor_time(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    context.user_data['outdoor_time'] = update.message.text
-    await update.message.reply_text("Какой у вас уровень физической активности? (например, занимаюсь спортом 3 раза в неделю, малоактивный образ жизни)")
-    return QUESTIONS + 5
-
-async def physical_activity(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    context.user_data['physical_activity'] = update.message.text
-    await update.message.reply_text("Какие у вас условия работы? (например, работа в офисе, работа на улице)")
-    return QUESTIONS + 6
-
-async def work_conditions(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    context.user_data['work_conditions'] = update.message.text
-    await update.message.reply_text("Какой у вас уровень стресса и сколько вы спите каждую ночь? (например, высокий уровень стресса, сплю 7-8 часов)")
-    return QUESTIONS + 7
-
-async def stress_sleep(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    context.user_data['stress_sleep'] = update.message.text
-    await update.message.reply_text("Как ваша кожа реагирует на сезонные изменения? (например, сухая зимой, жирная летом)")
-    return QUESTIONS + 8
-
-async def seasonal_changes(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    context.user_data['seasonal_changes'] = update.message.text
-    await update.message.reply_text("Сколько вам лет и есть ли у вас гормональные изменения? (например, мне 25, нет изменений)")
-    return QUESTIONS + 9
-
-async def age_hormones(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    context.user_data['age_hormones'] = update.message.text
-    await update.message.reply_text("В каком регионе вы находитесь? (например, Москва, Россия)")
-    return REGION
-
-# Обработчик завершения
-async def region(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    context.user_data['region'] = update.message.text
+# Функция для предоставления рекомендаций
+async def provide_recommendations(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     user_data = context.user_data
 
     # Формирование запроса к OpenAI
     prompt = f"""
     Пользователь прислал фото лица и ответил на несколько вопросов.
     Тип кожи: {user_data['skin_type']}
-    Чувствительность к ингредиентам: {user_data['sensitivity']}
-    Питьевой режим: {user_data['water_intake']}
-    Рацион: {user_data['diet']}
-    Гормональные изменения: {user_data['hormones']}
-    Время на улице: {user_data['outdoor_time']}
-    Уровень физической активности: {user_data['physical_activity']}
-    Условия работы: {user_data['work_conditions']}
-    Уровень стресса и сон: {user_data['stress_sleep']}
-    Сезонные изменения: {user_data['seasonal_changes']}
-    Возраст и гормональные изменения: {user_data['age_hormones']}
-    Регион: {user_data['region']}
-    Дайте рекомендации по домашнему уходу за кожей, включающие очищение, тонизирование, увлажнение, защиту от солнца и эксфолиацию.
-    Включите в каждую категорию 3 различных наименования средств, доступных в регионе пользователя.
+    Чувствительность: {user_data.get('answer_1')}
+    Питьевой режим: {user_data.get('answer_2')}
+    Рацион: {user_data.get('answer_3')}
+    Гормональные изменения: {user_data.get('answer_4')}
+    Время на улице: {user_data.get('answer_5')}
+    Уровень физической активности: {user_data.get('answer_6')}
+    Условия работы: {user_data.get('answer_7')}
+    Уровень стресса и сон: {user_data.get('answer_8')}
+    Сезонные изменения: {user_data.get('answer_9')}
+    Диагноз дерматолога: {user_data.get('answer_10')}
+    Лекарства/добавки: {user_data.get('answer_11')}
+    Возраст и гормональные изменения: {user_data.get('answer_12')}
+    Город: {user_data.get('answer_13')}
+    Дай рекомендации по уходу, включая очищение, тонизирование, увлажнение, защиту от солнца и эксфолиацию. Выбери 3 различных наименования средств в каждой категории, доступных в регионе запроса. Учтите время года и погоду в вашем регионе.
     """
+
     response = openai.Completion.create(
         engine="davinci",
         prompt=prompt,
@@ -139,6 +138,16 @@ async def region(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     )
 
     recommendations = response.choices[0].text.strip()
+    await update.message.reply_text(
+        "Базовые правила ухода за кожей:\n"
+        "• Результат ухода проявляется со временем. Используйте средства регулярно.\n"
+        "• Подбирайте уход в зависимости от сезона и климата.\n"
+        "• Всегда смывайте макияж перед сном.\n"
+        "• Очищайте и ухаживайте за шеей и зоной декольте.\n"
+        "• Защищайте кожу от солнца круглый год.\n"
+        "• Пейте достаточно воды для поддержания здоровья кожи.\n"
+        "• Меняйте постельное белье и используйте бумажные полотенца."
+    )
     await update.message.reply_text(f'Спасибо за ответы. Вот ваши рекомендации по уходу за кожей:\n{recommendations}')
     return ConversationHandler.END
 
@@ -150,21 +159,9 @@ def main():
         entry_points=[CommandHandler('start', start)],
         states={
             PHOTO: [MessageHandler(filters.PHOTO, photo)],
-            SKIN_TYPE_TEST: [MessageHandler(filters.TEXT & ~filters.COMMAND, skin_type_test)],
-            QUESTIONS: [
-                MessageHandler(filters.TEXT & ~filters.COMMAND, questions),
-                MessageHandler(filters.TEXT & ~filters.COMMAND, water_intake),
-                MessageHandler(filters.TEXT & ~filters.COMMAND, diet_questions),
-                MessageHandler(filters.TEXT & ~filters.COMMAND, hormones_questions),
-                MessageHandler(filters.TEXT & ~filters.COMMAND, outdoor_time),
-                MessageHandler(filters.TEXT & ~filters.COMMAND, physical_activity),
-                MessageHandler(filters.TEXT & ~filters.COMMAND, work_conditions),
-                MessageHandler(filters.TEXT & ~filters.COMMAND, stress_sleep),
-                MessageHandler(filters.TEXT & ~filters.COMMAND, seasonal_changes),
-                MessageHandler(filters.TEXT & ~filters.COMMAND, age_hormones)
-            ],
-            REGION: [MessageHandler(filters.TEXT & ~filters.COMMAND, region)],
-            RESULTS: [MessageHandler(filters.TEXT & ~filters.COMMAND, region)]
+            SKIN_TYPE: [MessageHandler(filters.TEXT & ~filters.COMMAND, skin_type)],
+            TEST: [MessageHandler(filters.TEXT & ~filters.COMMAND, test)],
+            QUESTIONS: [MessageHandler(filters.TEXT & ~filters.COMMAND, questions)]
         },
         fallbacks=[]
     )
