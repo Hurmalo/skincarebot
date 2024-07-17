@@ -33,7 +33,7 @@ async def photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     photo_path = f'/tmp/{photo_file.file_id}.jpg'
 
     # Загрузка файла
-    await photo_file.download(photo_path)
+    await photo_file.download_to_drive(photo_path)
 
     # Проверка качества фотографии через OpenAI
     with open(photo_path, "rb") as image_file:
