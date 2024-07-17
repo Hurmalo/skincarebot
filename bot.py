@@ -33,10 +33,17 @@ async def photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     photo_path = f'/tmp/{photo_file.file_id}.jpg'
 
     # Загрузка файла
-    await photo_file.download_to_drive(photo_path)
+    await photo_file.download(photo_path)
 
-    # Оценка качества фотографии (это просто placeholder, замените на свою проверку)
-    description = "лицо хорошо видно"  # Замените на свою логику проверки изображения
+    # Проверка качества фотографии через OpenAI
+    with open(photo_path, "rb") as image_file:
+        response = openai.Image.create_variation(
+            image=image_file,
+            n=1,
+            size="1024x1024"
+        )
+
+    description = response['data'][0]['url']
 
     if "лицо" not in description or "плохо видно" in description:
         await update.message.reply_text("Фото не подходит. Пожалуйста, сделайте новое фото, убедитесь, что ваше лицо хорошо видно и освещено.")
@@ -127,13 +134,15 @@ async def provide_recommendations(update: Update, context: ContextTypes.DEFAULT_
     Дай рекомендации по уходу, включая очищение, тонизирование, увлажнение, защиту от солнца и эксфолиацию. Выбери 3 различных наименования средств в каждой категории, доступных в регионе запроса. Учтите время года и погоду в вашем регионе.
     """
 
-    response = openai.Completion.create(
-        model="text-davinci-003",
-        prompt=prompt,
-        max_tokens=300
+    response = openai.ChatCompletion.create(
+        model="gpt-3.5-turbo",
+        messages=[
+            {"role": "system", "content": "You are a helpful assistant."},
+            {"role": "user", "content": prompt}
+        ]
     )
 
-    recommendations = response.choices[0].text.strip()
+    recommendations = response['choices'][0]['message']['content'].strip()
 
     await update.message.reply_text(
         "Базовые правила ухода за кожей:\n"
