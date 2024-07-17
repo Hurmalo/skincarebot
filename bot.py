@@ -2,6 +2,7 @@ import os
 import openai
 from telegram import Update, ReplyKeyboardMarkup, KeyboardButton
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes, ConversationHandler, CallbackContext, JobQueue
+import datetime
 
 # Инициализация бота
 TELEGRAM_TOKEN = os.getenv('TELEGRAM_TOKEN')
@@ -15,7 +16,7 @@ if not OPENAI_API_KEY:
 openai.api_key = OPENAI_API_KEY
 
 # Определение этапов разговора
-PHOTO, SKIN_TYPE, TEST, QUESTIONS, RESULTS, TRACK_PROGRESS, SET_REMINDER, REMINDER_TIME = range(7)
+PHOTO, SKIN_TYPE, TEST, QUESTIONS, RESULTS, TRACK_PROGRESS, SET_REMINDER, REMINDER_TIME = range(8)
 
 # Обработчик команды /start
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
@@ -33,13 +34,13 @@ async def photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     photo_path = f'/tmp/{photo_file.file_id}.jpg'
     await photo_file.download(photo_path)
 
-    response = openai.Completion.create(
-        engine="davinci",
-        prompt=f"Опишите качество и содержание этой фотографии: {photo_path}",
-        max_tokens=50
+    response = openai.Image.create_variation(
+        image=open(photo_path, "rb"),
+        n=1,
+        size="1024x1024"
     )
 
-    description = response.choices[0].text.strip()
+    description = response['data'][0]['url']
     if "лицо" not in description or "плохо видно" in description:
         await update.message.reply_text("Фото не подходит. Пожалуйста, сделайте новое фото, убедитесь, что ваше лицо хорошо видно и освещено.")
         return PHOTO
@@ -130,7 +131,7 @@ async def provide_recommendations(update: Update, context: ContextTypes.DEFAULT_
     """
 
     response = openai.Completion.create(
-        engine="davinci",
+        model="text-davinci-003",
         prompt=prompt,
         max_tokens=300
     )
@@ -177,7 +178,7 @@ async def set_reminder(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
         context.user_data['morning_time'] = time
         await update.message.reply_text(f"Уведомление утром установлено на {time}. Теперь введите время вечера в формате HH:MM.")
         return REMINDER_TIME
-    except ValueError:
+    except ValueError
         await update.message.reply_text("Неверный формат времени. Пожалуйста, введите время в формате HH:MM.")
         return SET_REMINDER
 
@@ -234,4 +235,4 @@ def main():
     application.run_polling()
 
 if __name__ == '__main__':
-    main()   
+    main()
