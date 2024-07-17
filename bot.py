@@ -30,7 +30,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
 async def photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     photo_file = await update.message.photo[-1].get_file()
     photo_path = f'/tmp/{photo_file.file_id}.jpg'
-    await photo_file.download_to_drive(photo_path)
+    await photo_file.download(photo_path)
 
     # Сохранение пути к файлу в данных пользователя
     context.user_data['photo_url'] = photo_file.file_path
@@ -118,33 +118,39 @@ async def provide_recommendations(update: Update, context: ContextTypes.DEFAULT_
     Гормональные изменения: {user_data.get('answer_2')}
     Возраст и город: {user_data.get('answer_3')}
     Фото пользователя: {user_data['photo_url']}
-    Дай рекомендации по уходу, включая очищение, тонизирование, увлажнение, защиту от солнца и эксфолиацию. Выбери 3 различных наименования средств в каждой категории, доступных в регионе запроса. Учтите время года и погоду в вашем регионе.
+    Основываясь на данных и фотографии, дай рекомендации в зависимости от ответов и рекомендацию по уходу за кожей, включая основной уход и дополнительный, также выбери 3 различных наименования средств в каждой категории, доступных в регионе пользователя. Учти время года и погоду в регионе.
     """
 
-    response = openai.ChatCompletion.create(
-        model="gpt-3.5-turbo",
-        messages=[
-            {"role": "system", "content": "You are a helpful assistant."},
-            {"role": "user", "content": prompt}
-        ]
-    )
+    try:
+        response = openai.ChatCompletion.create(
+            model="gpt-3.5-turbo",
+            messages=[
+                {"role": "system", "content": "You are a helpful assistant."},
+                {"role": "user", "content": prompt}
+            ]
+        )
 
-    recommendations = response['choices'][0]['message']['content'].strip()
+        recommendations = response['choices'][0]['message']['content'].strip()
 
-    await update.message.reply_text(
-        "Базовые правила ухода за кожей:\n"
-        "• Терпение и регулярность: Результат ухода проявляется со временем. Используйте средства регулярно.\n"
-        "• Сезонная косметика: Подбирайте уход в зависимости от сезона и климата.\n"
-        "• Удаление макияжа: Всегда смывайте макияж перед сном.\n"
-        "• Забота о шее и декольте: Очищайте и ухаживайте за шеей и зоной декольте.\n"
-        "• Использование SPF: Защищайте кожу от солнца круглый год.\n"
-        "• Гидратация: Пейте достаточно воды для поддержания здоровья кожи.\n"
-        "• Чистота: Меняйте постельное белье и используйте бумажные полотенца."
-    )
+        await update.message.reply_text(
+            "Базовые правила ухода за кожей:\n"
+            "Результат ухода проявляется со временем. Используйте средства регулярно.\n"
+            "Подбирайте уход в зависимости от сезона и климата.\n"
+            "Всегда смывайте макияж перед сном.\n"
+            "Очищайте и ухаживайте за шеей и зоной декольте.\n"
+            "Защищайте кожу от солнца круглый год.\n"
+            "Пейте достаточно воды для поддержания здоровья кожи.\n"
+            "Меняйте постельное белье и используйте бумажные полотенца."
+        )
 
-    await update.message.reply_text(
-        f'Спасибо за ответы. Вот ваши рекомендации по уходу за кожей:\n{recommendations}'
-    )
+        await update.message.reply_text(
+            f'Спасибо за ответы. Вот ваши рекомендации по уходу за кожей:\n{recommendations}'
+        )
+
+    except openai.error.RateLimitError:
+        await update.message.reply_text(
+            "Извините, в данный момент я не могу обработать ваш запрос из-за превышения лимита. Пожалуйста, попробуйте позже."
+        )
 
     return ConversationHandler.END
 
