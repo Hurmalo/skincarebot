@@ -32,7 +32,9 @@ async def photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     # Проверка качества фото через OpenAI
     photo_file = await update.message.photo[-1].get_file()
     photo_path = f'/tmp/{photo_file.file_id}.jpg'
-    await photo_file.download(photo_path)
+
+    # Загрузка файла
+    await photo_file.download_to_drive(photo_path)
 
     response = openai.Image.create_variation(
         image=open(photo_path, "rb"),
