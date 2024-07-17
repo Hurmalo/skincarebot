@@ -26,28 +26,14 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     )
     return PHOTO
 
-# Обработчик фото
+# Обработчик фото (с сохранением ссылки на фото)
 async def photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     photo_file = await update.message.photo[-1].get_file()
     photo_path = f'/tmp/{photo_file.file_id}.jpg'
-
-    # Загрузка файла
     await photo_file.download_to_drive(photo_path)
 
-    # Проверка качества фотографии через OpenAI
-    with open(photo_path, "rb") as image_file:
-        response = openai.Image.create_variation(
-            image=image_file,
-            n=1,
-            size="256x256"
-        )
-
-    # Используем OpenAI для генерации описания изображения и проверки, есть ли лицо
-    description = response['data'][0]['url']  # Здесь нужно использовать фактический API OpenAI для генерации описания
-
-    if "лицо" not in description or "плохо видно" in description:
-        await update.message.reply_text("Фото не подходит. Пожалуйста, сделайте новое фото, убедитесь, что ваше лицо хорошо видно и освещено.")
-        return PHOTO
+    # Сохранение пути к файлу в данных пользователя
+    context.user_data['photo_url'] = photo_file.file_path
 
     await update.message.reply_text("Фото получено! Давайте определим ваш тип кожи.")
     keyboard = [
@@ -131,6 +117,7 @@ async def provide_recommendations(update: Update, context: ContextTypes.DEFAULT_
     Рацион: {user_data.get('answer_1')}
     Гормональные изменения: {user_data.get('answer_2')}
     Возраст и город: {user_data.get('answer_3')}
+    Фото пользователя: {user_data['photo_url']}
     Дай рекомендации по уходу, включая очищение, тонизирование, увлажнение, защиту от солнца и эксфолиацию. Выбери 3 различных наименования средств в каждой категории, доступных в регионе запроса. Учтите время года и погоду в вашем регионе.
     """
 
