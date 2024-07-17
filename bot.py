@@ -1,8 +1,7 @@
 import os
 import openai
 from telegram import Update, ReplyKeyboardMarkup, KeyboardButton
-from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes, ConversationHandler, CallbackContext, JobQueue
-import datetime
+from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes, ConversationHandler
 
 # Инициализация бота
 TELEGRAM_TOKEN = os.getenv('TELEGRAM_TOKEN')
@@ -16,7 +15,7 @@ if not OPENAI_API_KEY:
 openai.api_key = OPENAI_API_KEY
 
 # Определение этапов разговора
-PHOTO, SKIN_TYPE, TEST, QUESTIONS, RESULTS, TRACK_PROGRESS, SET_REMINDER, REMINDER_TIME = range(8)
+PHOTO, SKIN_TYPE, TEST, QUESTIONS, RESULTS = range(5)
 
 # Обработчик команды /start
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
@@ -40,10 +39,11 @@ async def photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
         response = openai.Image.create_variation(
             image=image_file,
             n=1,
-            size="1024x1024"
+            size="256x256"
         )
 
-    description = response['data'][0]['url']
+    # Используем OpenAI для генерации описания изображения и проверки, есть ли лицо
+    description = response['data'][0]['url']  # Здесь нужно использовать фактический API OpenAI для генерации описания
 
     if "лицо" not in description or "плохо видно" in description:
         await update.message.reply_text("Фото не подходит. Пожалуйста, сделайте новое фото, убедитесь, что ваше лицо хорошо видно и освещено.")
@@ -159,65 +159,7 @@ async def provide_recommendations(update: Update, context: ContextTypes.DEFAULT_
         f'Спасибо за ответы. Вот ваши рекомендации по уходу за кожей:\n{recommendations}'
     )
 
-    keyboard = [
-        [KeyboardButton("Да"), KeyboardButton("Нет")]
-    ]
-    reply_markup = ReplyKeyboardMarkup(keyboard, one_time_keyboard=True)
-    await update.message.reply_text("Хотите ли вы начать следить за прогрессом состояния кожи?", reply_markup=reply_markup)
-    return TRACK_PROGRESS
-
-# Обработчик выбора отслеживания прогресса
-async def track_progress(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    text = update.message.text
-    if text == "Да":
-        await update.message.reply_text("Отлично! Давайте настроим уведомления. Введите время утра в формате HH:MM.")
-        return SET_REMINDER
-    else:
-        await update.message.reply_text("Если вы передумаете, просто дайте знать. Спасибо!")
-        return ConversationHandler.END
-
-# Обработчик установки времени уведомлений
-async def set_reminder(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    time = update.message.text
-    try:
-        hours, minutes = map(int, time.split(':'))
-        context.user_data['morning_time'] = time
-        await update.message.reply_text(f"Уведомление утром установлено на {time}. Теперь введите время вечера в формате HH:MM.")
-        return REMINDER_TIME
-    except ValueError:
-        await update.message.reply_text("Неверный формат времени. Пожалуйста, введите время в формате HH:MM.")
-        return SET_REMINDER
-
-# Обработчик установки времени уведомлений вечером
-async def reminder_time(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    time = update.message.text
-    try:
-        hours, minutes = map(int, time.split(':'))
-        context.user_data['evening_time'] = time
-        await update.message.reply_text(f"Уведомление вечером установлено на {time}. Спасибо! Мы будем отправлять вам напоминания утром и вечером.")
-        
-        # Настройка уведомлений
-        job_queue = context.job_queue
-        morning_time = context.user_data['morning_time']
-        evening_time = context.user_data['evening_time']
-
-        job_queue.run_daily(morning_notification, time=datetime.time(hour=int(morning_time.split(':')[0]), minute=int(morning_time.split(':')[1])), context=update.message.chat_id)
-        job_queue.run_daily(evening_notification, time=datetime.time(hour=int(evening_time.split(':')[0]), minute=int(evening_time.split(':')[1])), context=update.message.chat_id)
-
-        return ConversationHandler.END
-    except ValueError:
-        await update.message.reply_text("Неверный формат времени. Пожалуйста, введите время в формате HH:MM.")
-        return REMINDER_TIME
-
-# Уведомление утром
-async def morning_notification(context: CallbackContext) -> None:
-    job = context.job
-    await context.bot.send_message(job.context, text="Доброе утро! Не забудьте провести утренний ритуал ухода за кожей и отправить фото с датой.")
-
-# Уведомление вечером
-async def evening_notification(context: CallbackContext) -> None:
-    job = context.job
-    await context.bot.send_message(job.context, text="Добрый вечер! Не забудьте провести вечерний ритуал ухода за кожей и отправить фото с датой.")
+    return ConversationHandler.END
 
 # Основная функция
 def main():
@@ -229,10 +171,7 @@ def main():
             PHOTO: [MessageHandler(filters.PHOTO, photo)],
             SKIN_TYPE: [MessageHandler(filters.TEXT & ~filters.COMMAND, skin_type)],
             TEST: [MessageHandler(filters.TEXT & ~filters.COMMAND, test)],
-            QUESTIONS: [MessageHandler(filters.TEXT & ~filters.COMMAND, questions)],
-            TRACK_PROGRESS: [MessageHandler(filters.TEXT & ~filters.COMMAND, track_progress)],
-            SET_REMINDER: [MessageHandler(filters.TEXT & ~filters.COMMAND, set_reminder)],
-            REMINDER_TIME: [MessageHandler(filters.TEXT & ~filters.COMMAND, reminder_time)]
+            QUESTIONS: [MessageHandler(filters.TEXT & ~filters.COMMAND, questions)]
         },
         fallbacks=[]
     )
