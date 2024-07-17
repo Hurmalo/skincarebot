@@ -1,7 +1,7 @@
 import os
 import openai
 from telegram import Update, ReplyKeyboardMarkup, KeyboardButton
-from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes, ConversationHandler
+from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes, ConversationHandler, CallbackContext, JobQueue
 
 # Инициализация бота
 TELEGRAM_TOKEN = os.getenv('TELEGRAM_TOKEN')
@@ -15,7 +15,7 @@ if not OPENAI_API_KEY:
 openai.api_key = OPENAI_API_KEY
 
 # Определение этапов разговора
-PHOTO, SKIN_TYPE, TEST, QUESTIONS, RESULTS = range(5)
+PHOTO, SKIN_TYPE, TEST, QUESTIONS, RESULTS, TRACK_PROGRESS, SET_REMINDER, REMINDER_TIME = range(7)
 
 # Обработчик команды /start
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
@@ -28,7 +28,22 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
 
 # Обработчик фото
 async def photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    # Здесь должна быть проверка качества фото
+    # Проверка качества фото через OpenAI
+    photo_file = await update.message.photo[-1].get_file()
+    photo_path = f'/tmp/{photo_file.file_id}.jpg'
+    await photo_file.download(photo_path)
+
+    response = openai.Completion.create(
+        engine="davinci",
+        prompt=f"Опишите качество и содержание этой фотографии: {photo_path}",
+        max_tokens=50
+    )
+
+    description = response.choices[0].text.strip()
+    if "лицо" not in description or "плохо видно" in description:
+        await update.message.reply_text("Фото не подходит. Пожалуйста, сделайте новое фото, убедитесь, что ваше лицо хорошо видно и освещено.")
+        return PHOTO
+
     await update.message.reply_text("Фото получено! Давайте определим ваш тип кожи.")
     keyboard = [
         [KeyboardButton("Жирная кожа"), KeyboardButton("Комбинированная кожа")],
@@ -79,19 +94,10 @@ async def test(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
 # Функция для задания следующего вопроса
 async def ask_next_question(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     questions = [
-        "Есть ли у вас чувствительность к каким-либо ингредиентам или аллергии? (да/нет, если да, укажите какие)",
-        "Какой у вас питьевой режим? (например, пью 2 литра воды в день, редко пью воду)",
+        "Есть ли у вас чувствительность к каким-либо ингредиентам или аллергии? Какой у вас питьевой режим? (да/нет, если да, укажите какие; например, пью 2 литра воды в день, редко пью воду)",
         "Какой у вас рацион? (например, сбалансированный, много сладкого, вегетарианский и т.д.)",
         "Есть ли у вас гормональные изменения или проблемы? (например, беременность, подростковый возраст, менопауза)",
-        "Сколько времени вы проводите на улице каждый день? (например, менее часа, 1-3 часа, более 3 часов)",
-        "Какой у вас уровень физической активности? (например, занимаюсь спортом 3 раза в неделю, малоактивный образ жизни)",
-        "Какие у вас условия работы? (например, работа в офисе, работа на улице)",
-        "Какой у вас уровень стресса и сколько вы спите каждую ночь? (например, высокий уровень стресса, сплю 7-8 часов)",
-        "Как ваша кожа реагирует на сезонные изменения? (например, сухая зимой, жирная летом)",
-        "Вы зарегистрированы у дерматолога? Если да, то с каким диагнозом и какое лечение назначено?",
-        "Принимаете ли вы какие-либо лекарства/добавки? Если да, то какие?",
-        "Сколько вам лет и есть ли у вас гормональные изменения? (например, мне 25, нет изменений)",
-        "В каком городе вы живете?"
+        "Сколько вам лет и в каком городе вы живете?"
     ]
 
     current_question = context.user_data.get('current_question', 0)
@@ -104,7 +110,8 @@ async def ask_next_question(update: Update, context: ContextTypes.DEFAULT_TYPE) 
 
 # Обработчик ответов на вопросы
 async def questions(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    context.user_data[f'answer_{context.user_data["current_question"]}'] = update.message.text
+    current_question = context.user_data.get('current_question', 0)
+    context.user_data[f'answer_{current_question - 1}'] = update.message.text
     return await ask_next_question(update, context)
 
 # Функция для предоставления рекомендаций
@@ -115,19 +122,10 @@ async def provide_recommendations(update: Update, context: ContextTypes.DEFAULT_
     prompt = f"""
     Пользователь прислал фото лица и ответил на несколько вопросов.
     Тип кожи: {user_data['skin_type']}
-    Чувствительность: {user_data.get('answer_1')}
-    Питьевой режим: {user_data.get('answer_2')}
-    Рацион: {user_data.get('answer_3')}
-    Гормональные изменения: {user_data.get('answer_4')}
-    Время на улице: {user_data.get('answer_5')}
-    Уровень физической активности: {user_data.get('answer_6')}
-    Условия работы: {user_data.get('answer_7')}
-    Уровень стресса и сон: {user_data.get('answer_8')}
-    Сезонные изменения: {user_data.get('answer_9')}
-    Диагноз дерматолога: {user_data.get('answer_10')}
-    Лекарства/добавки: {user_data.get('answer_11')}
-    Возраст и гормональные изменения: {user_data.get('answer_12')}
-    Город: {user_data.get('answer_13')}
+    Чувствительность и питьевой режим: {user_data.get('answer_0')}
+    Рацион: {user_data.get('answer_1')}
+    Гормональные изменения: {user_data.get('answer_2')}
+    Возраст и город: {user_data.get('answer_3')}
     Дай рекомендации по уходу, включая очищение, тонизирование, увлажнение, защиту от солнца и эксфолиацию. Выбери 3 различных наименования средств в каждой категории, доступных в регионе запроса. Учтите время года и погоду в вашем регионе.
     """
 
@@ -138,18 +136,81 @@ async def provide_recommendations(update: Update, context: ContextTypes.DEFAULT_
     )
 
     recommendations = response.choices[0].text.strip()
+
     await update.message.reply_text(
         "Базовые правила ухода за кожей:\n"
-        "• Результат ухода проявляется со временем. Используйте средства регулярно.\n"
-        "• Подбирайте уход в зависимости от сезона и климата.\n"
-        "• Всегда смывайте макияж перед сном.\n"
-        "• Очищайте и ухаживайте за шеей и зоной декольте.\n"
-        "• Защищайте кожу от солнца круглый год.\n"
-        "• Пейте достаточно воды для поддержания здоровья кожи.\n"
-        "• Меняйте постельное белье и используйте бумажные полотенца."
+        "• Терпение и регулярность: Результат ухода проявляется со временем. Используйте средства регулярно.\n"
+        "• Сезонная косметика: Подбирайте уход в зависимости от сезона и климата.\n"
+        "• Удаление макияжа: Всегда смывайте макияж перед сном.\n"
+        "• Забота о шее и декольте: Очищайте и ухаживайте за шеей и зоной декольте.\n"
+        "• Использование SPF: Защищайте кожу от солнца круглый год.\n"
+        "• Гидратация: Пейте достаточно воды для поддержания здоровья кожи.\n"
+        "• Чистота: Меняйте постельное белье и используйте бумажные полотенца."
     )
-    await update.message.reply_text(f'Спасибо за ответы. Вот ваши рекомендации по уходу за кожей:\n{recommendations}')
-    return ConversationHandler.END
+
+    await update.message.reply_text(
+        f'Спасибо за ответы. Вот ваши рекомендации по уходу за кожей:\n{recommendations}'
+    )
+
+    keyboard = [
+        [KeyboardButton("Да"), KeyboardButton("Нет")]
+    ]
+    reply_markup = ReplyKeyboardMarkup(keyboard, one_time_keyboard=True)
+    await update.message.reply_text("Хотите ли вы начать следить за прогрессом состояния кожи?", reply_markup=reply_markup)
+    return TRACK_PROGRESS
+
+# Обработчик выбора отслеживания прогресса
+async def track_progress(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    text = update.message.text
+    if text == "Да":
+        await update.message.reply_text("Отлично! Давайте настроим уведомления. Введите время утра в формате HH:MM.")
+        return SET_REMINDER
+    else:
+        await update.message.reply_text("Если вы передумаете, просто дайте знать. Спасибо!")
+        return ConversationHandler.END
+
+# Обработчик установки времени уведомлений
+async def set_reminder(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    time = update.message.text
+    try:
+        hours, minutes = map(int, time.split(':'))
+        context.user_data['morning_time'] = time
+        await update.message.reply_text(f"Уведомление утром установлено на {time}. Теперь введите время вечера в формате HH:MM.")
+        return REMINDER_TIME
+    except ValueError:
+        await update.message.reply_text("Неверный формат времени. Пожалуйста, введите время в формате HH:MM.")
+        return SET_REMINDER
+
+# Обработчик установки времени уведомлений вечером
+async def reminder_time(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    time = update.message.text
+    try:
+        hours, minutes = map(int, time.split(':'))
+        context.user_data['evening_time'] = time
+        await update.message.reply_text(f"Уведомление вечером установлено на {time}. Спасибо! Мы будем отправлять вам напоминания утром и вечером.")
+        
+        # Настройка уведомлений
+        job_queue = context.job_queue
+        morning_time = context.user_data['morning_time']
+        evening_time = context.user_data['evening_time']
+
+        job_queue.run_daily(morning_notification, time=datetime.time(hour=int(morning_time.split(':')[0]), minute=int(morning_time.split(':')[1])), context=update.message.chat_id)
+        job_queue.run_daily(evening_notification, time=datetime.time(hour=int(evening_time.split(':')[0]), minute=int(evening_time.split(':')[1])), context=update.message.chat_id)
+
+        return ConversationHandler.END
+    except ValueError:
+        await update.message.reply_text("Неверный формат времени. Пожалуйста, введите время в формате HH:MM.")
+        return REMINDER_TIME
+
+# Уведомление утром
+async def morning_notification(context: CallbackContext) -> None:
+    job = context.job
+    await context.bot.send_message(job.context, text="Доброе утро! Не забудьте провести утренний ритуал ухода за кожей и отправить фото с датой.")
+
+# Уведомление вечером
+async def evening_notification(context: CallbackContext) -> None:
+    job = context.job
+    await context.bot.send_message(job.context, text="Добрый вечер! Не забудьте провести вечерний ритуал ухода за кожей и отправить фото с датой.")
 
 # Основная функция
 def main():
@@ -161,7 +222,10 @@ def main():
             PHOTO: [MessageHandler(filters.PHOTO, photo)],
             SKIN_TYPE: [MessageHandler(filters.TEXT & ~filters.COMMAND, skin_type)],
             TEST: [MessageHandler(filters.TEXT & ~filters.COMMAND, test)],
-            QUESTIONS: [MessageHandler(filters.TEXT & ~filters.COMMAND, questions)]
+            QUESTIONS: [MessageHandler(filters.TEXT & ~filters.COMMAND, questions)],
+            TRACK_PROGRESS: [MessageHandler(filters.TEXT & ~filters.COMMAND, track_progress)],
+            SET_REMINDER: [MessageHandler(filters.TEXT & ~filters.COMMAND, set_reminder)],
+            REMINDER_TIME: [MessageHandler(filters.TEXT & ~filters.COMMAND, reminder_time)]
         },
         fallbacks=[]
     )
@@ -170,4 +234,4 @@ def main():
     application.run_polling()
 
 if __name__ == '__main__':
-    main()
+    main()   
